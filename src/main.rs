@@ -59,16 +59,6 @@ fn build_successor(max_step: u8) -> Vec<(u8, u8)> {
     return successors;
 }
 
-// allowed_step(step)
-fn build_allowed_steps(max_step: u8) -> Vec<(u8,)> {
-    let mut allowed_steps = Vec::new();
-
-    for step in 0..=max_step {
-        allowed_steps.push((step,));
-    }
-    return allowed_steps;
-}
-
 // get the path to checkmate
 // edges: (from, step, to, rook_id)
 fn extract_path(
