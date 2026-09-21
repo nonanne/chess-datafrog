@@ -1,245 +1,261 @@
 extern crate datafrog;
-use datafrog::{Iteration, Relation};
+use datafrog::{Iteration, Relation, Variable};
 
 use std::fs::File;
 use std::io::Write;
 
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
 enum PieceType {
-    King = 1,
-    Queen = 2,
-    Rook = 3,
-    Pown = 4,
+    King,
+    Queen,
+    Bishop,
+    Knight,
+    Rook,
+    Pawn,
+}
+
+#[derive(PartialEq, Eq, PartialOrd,Ord)]
+enum Color{
+    Black,
+    White,
+}
+//derive for compare by rust
+#[derive(Debug,Clone, Copy, PartialEq, Eq, PartialOrd,Ord)]
+enum PieceId {
+    White_Pawn1,
+    White_Pawn2,
+    White_Pawn3,
+    White_Pawn4,
+    White_Pawn5,
+    White_Pawn6,
+    White_Pawn7,
+    White_Pawn8,
+    White_King,
+    White_Queen,
+    White_Bishop1,
+    White_Bishop2,
+    White_Knight1,
+    White_Knight2,
+    White_Rook1,
+    White_Rook2,
+
+    Black_Pawn1,
+    Black_Pawn2,
+    Black_Pawn3,
+    Black_Pawn4,
+    Black_Pawn5,
+    Black_Pawn6,
+    Black_Pawn7,
+    Black_Pawn8,
+    Black_King,
+    Black_Queen,
+    Black_Bishop1,
+    Black_Bishop2,
+    Black_Knight1,
+    Black_Knight2,
+    Black_Rook1,
+    Black_Rook2,
 }
 
 struct Piece {
-    id: u8,
-    piece_type: u8, // 1: King, 2: Queen, 3: Rook, 4: Pown
-    color: u8,      // 0: white, 1: black
-    pos: u8,
+    id: PieceId,
+    piece_type: PieceType,
+    color: Color,      // 0: white, 1: black
 }
 
-// Convert board position (1..64) to (row, col)
-fn row_column_tuple(pos: u8) -> (u8, u8) {
-    let position_row = pos / 8;
-    let position_col = pos % 8;
-    return (position_row, position_col);
+struct Cell_Num{
+    cell_num: u8,
 }
 
-// Build all rook moves on an empty 8x8 board.
-// rook_move(from, to)
-fn build_rook_moves() -> Vec<(u8, u8)> {
-    let mut moves = Vec::new();
-
-    for from in 0..=63 {
-        let (row_from, col_from) = row_column_tuple(from);
-
-        for to in 0..=63 {
-            if from == to {
-                continue;
-            }
-
-            let (row_to, col_to) = row_column_tuple(to);
-            // make available rook moves facts
-            if row_from == row_to || col_from == col_to {
-                moves.push((from, to));
-            }
-        }
-    }
-    return moves;
+struct Step_State{
+    step_current: u8,
+    step_next: u8,
 }
 
-// successor(step, next_step)
-fn build_successor(max_step: u8) -> Vec<(u8, u8)> {
-    let mut successors = Vec::new();
+struct Board_State{
+    step: u8,
+    piece_id: PieceId,
+    x: u8,
+    y:u8,
+}
 
-    for step in 0..=max_step -1{
-        let next_step = step + 1;
-        successors.push((step, next_step));
-    }
-    return successors;
+struct Move_State{
+    step_from: u8,
+    piece_id: PieceId,
+    x_from: u8,
+    y_from:u8,
+    step_to: u8,
+    piece_id_to: PieceId,
+    x_to: u8,
+    y_to: u8,
 }
 
 // get the path to checkmate
 // edges: (from, step, to, rook_id)
-fn extract_path(
-    edges: &[(u8, u8, u8, u8)], // list of (from, step, to, rook_id)
-    target_pos: u8, // the position of king
-    reached_step: u8, // how many steps it took to checkmate
-) -> Vec<u8> {
-    let mut path = vec![];
-    path.push(target_pos);
-    let mut current = target_pos;
-    let mut step = reached_step;
-
-    while step > 0 {
-        let mut all_edges: Option<(u8, u8, u8, u8)> = None;
-
-        for &(from, s, to, rid) in edges {
-            if s == step && to == current{
-                all_edges = Some((from, s, to, rid));
-                break;
-            }
-        }
-        if all_edges.is_some()
-        {
-            let from = all_edges.unwrap().0;
-            path.push(from);
-            current = from;
-        }
-        step -= 1;  
-    }
-
-    path.reverse();
-    return path;
-}
-
 fn main() -> Result<(), Box<dyn std::error::Error>>{
-    let max_step: u8 = 5;
+let mut iteration = Iteration::new();
 
-    let pieces_vec = vec![
-        Piece { id: 0, piece_type: PieceType::King as u8,  color: 0, pos: 0},  // white king
-        Piece { id: 1, piece_type: PieceType::Rook as u8,  color: 0, pos: 13},  // white rook
-        Piece { id: 5, piece_type: PieceType::Rook as u8,  color: 0, pos: 16},  // white rook
-        Piece { id: 4, piece_type: PieceType::Rook as u8,  color: 1, pos: 29},  // black rook
-        Piece { id: 2, piece_type: PieceType::Queen as u8, color: 0, pos: 20},  // white queen
-        Piece { id: 3, piece_type: PieceType::King as u8,  color: 1, pos: 51},  // black king
-    ];
+let mut cell_num_vec = Vec::new();
+for i in 1..=8 {
+    cell_num_vec.push(Cell_Num {
+        cell_num: i,
+    });
+}
+let initinal_board_state_vec = vec![
+    Board_State { step: 0, piece_id: PieceId::White_Pawn1, x: 1, y: 2 },
+    Board_State { step: 0, piece_id: PieceId::White_Pawn2, x: 2, y: 2 },
+    Board_State { step: 0, piece_id: PieceId::White_Pawn3, x: 3, y: 2 },
+    Board_State { step: 0, piece_id: PieceId::White_Pawn4, x: 4, y: 2 },
+    Board_State { step: 0, piece_id: PieceId::White_Pawn5, x: 5, y: 2 },
+    Board_State { step: 0, piece_id: PieceId::White_Pawn6, x: 6, y: 2 },
+    Board_State { step: 0, piece_id: PieceId::White_Pawn7, x: 7, y: 2 },
+    Board_State { step: 0, piece_id: PieceId::White_Pawn8, x: 8, y: 2 },
 
-    let rook_move_vec: Vec<(u8, u8)> = build_rook_moves();     // (from, to)
-    let successor_step_vec: Vec<(u8, u8)> = build_successor(max_step);        // (step, next_step)
+    Board_State { step: 0, piece_id: PieceId::White_Rook1,   x: 1, y: 1 },
+    Board_State { step: 0, piece_id: PieceId::White_Knight1, x: 2, y: 1 },
+    Board_State { step: 0, piece_id: PieceId::White_Bishop1, x: 3, y: 1 },
+    Board_State { step: 0, piece_id: PieceId::White_Queen,   x: 4, y: 1 },
+    Board_State { step: 0, piece_id: PieceId::White_King,    x: 5, y: 1 },
+    Board_State { step: 0, piece_id: PieceId::White_Bishop2, x: 6, y: 1 },
+    Board_State { step: 0, piece_id: PieceId::White_Knight2, x: 7, y: 1 },
+    Board_State { step: 0, piece_id: PieceId::White_Rook2,   x: 8, y: 1 },
 
-    // position of black king
-    let target_pos: u8 = pieces_vec
-        .iter()
-        .find(|p| p.piece_type == PieceType::King as u8 && p.color == 1)
-        .map(|p| p.pos)
-        .expect("no black king");
+    Board_State { step: 0, piece_id: PieceId::Black_Pawn1, x: 1, y: 7 },
+    Board_State { step: 0, piece_id: PieceId::Black_Pawn2, x: 2, y: 7 },
+    Board_State { step: 0, piece_id: PieceId::Black_Pawn3, x: 3, y: 7 },
+    Board_State { step: 0, piece_id: PieceId::Black_Pawn4, x: 4, y: 7 },
+    Board_State { step: 0, piece_id: PieceId::Black_Pawn5, x: 5, y: 7 },
+    Board_State { step: 0, piece_id: PieceId::Black_Pawn6, x: 6, y: 7 },
+    Board_State { step: 0, piece_id: PieceId::Black_Pawn7, x: 7, y: 7 },
+    Board_State { step: 0, piece_id: PieceId::Black_Pawn8, x: 8, y: 7 },
 
-    // rook_pos_facts(pos, step, rook_id)
-    let rook_at_initial: Vec<(u8, (u8, u8))> = pieces_vec
-        .iter()
-        .filter(|p| p.piece_type == PieceType::Rook as u8 && p.color == 0) 
-        .map(|p| (p.pos, (0, p.id))) // (pos, step, rook_id)
-        .collect();
-    /////
-    // static facts
-    /////
-    let rook_move_facts: Relation<(u8, u8)> = rook_move_vec.into();
-    let successor_step_facts: Relation<(u8, u8)> = successor_step_vec.into();
-    let target_facts: Relation<(u8, ())> = vec![(target_pos, ())].into();
+    Board_State { step: 0, piece_id: PieceId::Black_Rook1,   x: 1, y: 8 },
+    Board_State { step: 0, piece_id: PieceId::Black_Knight1, x: 2, y: 8 },
+    Board_State { step: 0, piece_id: PieceId::Black_Bishop1, x: 3, y: 8 },
+    Board_State { step: 0, piece_id: PieceId::Black_Queen,   x: 4, y: 8 },
+    Board_State { step: 0, piece_id: PieceId::Black_King,    x: 5, y: 8 },
+    Board_State { step: 0, piece_id: PieceId::Black_Bishop2, x: 6, y: 8 },
+    Board_State { step: 0, piece_id: PieceId::Black_Knight2, x: 7, y: 8 },
+    Board_State { step: 0, piece_id: PieceId::Black_Rook2,   x: 8, y: 8 },
+];
 
-    /////
-    // dynamic facts
-    /////
-    let mut iteration = Iteration::new();
-    // rook_pos_facts(pos, step, rook_id)
-    let rook_pos_facts = iteration.variable::<(u8, (u8, u8))>("rook_pos_facts");
-    // rook_step_facts(step, (pos, rook_id))
-    let rook_step_facts =
-        iteration.variable::<(u8, (u8, u8))>("rook_step_facts");
-    // rook_pos_next_facts(pos, (next_step, rook_id))
-    let rook_pos_next_facts =
-        iteration.variable::<(u8, (u8, u8))>("rook_pos_next_facts");
+let pieces_vec = vec![
+    Piece { id: PieceId::White_Pawn1, piece_type: PieceType::Pawn, color: Color::White },
+    Piece { id: PieceId::White_Pawn2, piece_type: PieceType::Pawn, color: Color::White },
+    Piece { id: PieceId::White_Pawn3, piece_type: PieceType::Pawn, color: Color::White },
+    Piece { id: PieceId::White_Pawn4, piece_type: PieceType::Pawn, color: Color::White },
+    Piece { id: PieceId::White_Pawn5, piece_type: PieceType::Pawn, color: Color::White },
+    Piece { id: PieceId::White_Pawn6, piece_type: PieceType::Pawn, color: Color::White },
+    Piece { id: PieceId::White_Pawn7, piece_type: PieceType::Pawn, color: Color::White },
+    Piece { id: PieceId::White_Pawn8, piece_type: PieceType::Pawn, color: Color::White },
 
-    // move_edge(from, step, to, rook_id)
-    let move_edge = iteration.variable::<(u8, u8, u8, u8)>("move_edge");
+    Piece { id: PieceId::White_King, piece_type: PieceType::King, color: Color::White },
+    Piece { id: PieceId::White_Queen, piece_type: PieceType::Queen, color: Color::White },
 
-    /////
-    // goal facts
-    // checkmates(step, rook_id)
-    /////
-    let checkmates = iteration.variable::<(u8, u8)>("checkmates");
+    Piece { id: PieceId::White_Bishop1, piece_type: PieceType::Bishop, color: Color::White },
+    Piece { id: PieceId::White_Bishop2, piece_type: PieceType::Bishop, color: Color::White },
 
-    // initial load
-    rook_pos_facts.insert(rook_at_initial.into());
+    Piece { id: PieceId::White_Knight1, piece_type: PieceType::Knight, color: Color::White },
+    Piece { id: PieceId::White_Knight2, piece_type: PieceType::Knight, color: Color::White },
 
-    while iteration.changed() {
-        /////
-        // rules
-        /////
+    Piece { id: PieceId::White_Rook1, piece_type: PieceType::Rook, color: Color::White },
+    Piece { id: PieceId::White_Rook2, piece_type: PieceType::Rook, color: Color::White },
 
-        /////
-        // rook_pos_facts(pos, step, rook_id)
-        // => rook_step_facts(step, (pos, rook_id))
-        /////
-        rook_step_facts.from_map(
-            &rook_pos_facts,
-            |&(pos, (step, rook_id))| 
-            (step, (pos, rook_id)),
-        );
+    Piece { id: PieceId::Black_Pawn1, piece_type: PieceType::Pawn, color: Color::Black },
+    Piece { id: PieceId::Black_Pawn2, piece_type: PieceType::Pawn, color: Color::Black },
+    Piece { id: PieceId::Black_Pawn3, piece_type: PieceType::Pawn, color: Color::Black },
+    Piece { id: PieceId::Black_Pawn4, piece_type: PieceType::Pawn, color: Color::Black },
+    Piece { id: PieceId::Black_Pawn5, piece_type: PieceType::Pawn, color: Color::Black },
+    Piece { id: PieceId::Black_Pawn6, piece_type: PieceType::Pawn, color: Color::Black },
+    Piece { id: PieceId::Black_Pawn7, piece_type: PieceType::Pawn, color: Color::Black },
+    Piece { id: PieceId::Black_Pawn8, piece_type: PieceType::Pawn, color: Color::Black },
 
-        /////
-        // rook_step_facts(step, (pos, rook_id))
-        // + successor_step_facts(step, next_step)
-        // => rook_pos_next_facts(pos, (next_step, rook_id))
-        /////
-        rook_pos_next_facts.from_join(
-            &rook_step_facts,
-            &successor_step_facts,
-            |_step, &(pos, rook_id), &next_step| 
-            (pos, (next_step, rook_id)),
-        );
+    Piece { id: PieceId::Black_King, piece_type: PieceType::King, color: Color::Black },
+    Piece { id: PieceId::Black_Queen, piece_type: PieceType::Queen, color: Color::Black },
 
-        /////
-        // rook_pos_next_facts(from, (next_step, rook_id))
-        // + rook_move_facts(from, to)
-        // => rook_pos_facts(to, next_step, rook_id)
-        /////
-        rook_pos_facts.from_join(
-            &rook_pos_next_facts,
-            &rook_move_facts,
-            |_from, &(next_step, rook_id), &to| 
-            (to, (next_step, rook_id)),
-        );
+    Piece { id: PieceId::Black_Bishop1, piece_type: PieceType::Bishop, color: Color::Black },
+    Piece { id: PieceId::Black_Bishop2, piece_type: PieceType::Bishop, color: Color::Black },
 
-        /////
-        // rook_pos_next_facts(from, (next_step, rook_id))
-        // + rook_move_facts(from, to)
-        // => move_edge(from, step, to, rook_id)
-        /////
-        move_edge.from_join(
-            &rook_pos_next_facts,
-            &rook_move_facts,
-            |&from, &(next_step, rook_id), &to| 
-            (from, next_step.saturating_sub(1), to, rook_id),
-        );
+    Piece { id: PieceId::Black_Knight1, piece_type: PieceType::Knight, color: Color::Black },
+    Piece { id: PieceId::Black_Knight2, piece_type: PieceType::Knight, color: Color::Black },
 
-        /////
-        // rook_at_by_pos_facts(pos, (step, rook_id))
-        // + target_facts(pos)
-        // => checkmates(step, rook_id)
-        /////
-        checkmates.from_join(
-            &rook_pos_facts,
-            &target_facts,
-            |_pos, &(step, rook_id), &()| 
-            (step, rook_id),
-        );
-    }
+    Piece { id: PieceId::Black_Rook1, piece_type: PieceType::Rook, color: Color::Black },
+    Piece { id: PieceId::Black_Rook2, piece_type: PieceType::Rook, color: Color::Black },
+];
 
-    // Results
-    let reached_results = checkmates.complete();
-    let move_edge_results = move_edge.complete();
+// TODO: make a script and input data instead of writing here.
+let move_state_vec = vec![
+    Move_State { step_from: 0, piece_id: PieceId::White_Pawn1, x_from: 1, y_from: 2,step_to: 1, piece_id_to: PieceId::White_Pawn1,x_to: 1, y_to: 3 },
+    Move_State { step_from: 1, piece_id: PieceId::Black_Pawn1, x_from: 1, y_from: 7,step_to: 2, piece_id_to: PieceId::White_Pawn1,x_to: 1, y_to: 6 },
+    Move_State { step_from: 2, piece_id: PieceId::White_Pawn2, x_from: 2, y_from: 2,step_to: 3, piece_id_to: PieceId::White_Pawn1,x_to: 2, y_to: 3 },
+    Move_State { step_from: 3, piece_id: PieceId::Black_Pawn2, x_from: 2, y_from: 7,step_to: 4, piece_id_to: PieceId::White_Pawn1,x_to: 2, y_to: 6 },
+];
+// let step_state_vec = vec![
+//     Step_State{step_current:0,step_to}
+// ];
 
-    println!("***** Result *****");
-    if let Some(&(step, rook_id)) = reached_results.elements.first() {
-        println!(
-            "Checkmate！ rook_id={} reached in {}steps to pos={} .",
-            rook_id, step, target_pos
-        );
+// Vec<Cell_Num> -> Vec<u8> -> Relation<u8>
+let cell_numbers: Vec<u8> = cell_num_vec
+    .into_iter()
+    .map(|cell| cell.cell_num)
+    .collect();
+// Relation. for stable facts and dont add new facts while 推論
+let cell_num_relation: Relation<u8> = cell_numbers.into();
 
-        let path = extract_path(&move_edge_results.elements, target_pos, step);
+let pieces: Vec<(PieceId, PieceType, Color)> = pieces_vec
+    .into_iter()
+    .map(|p| (
+        p.id,
+        p.piece_type,
+        p.color,
+    ))
+    .collect();
+let pieces_relation: Relation<(PieceId, PieceType, Color)> = pieces.into();
 
-        let json_data = format!(
-            "{{\n  \"path\": {:?},\n  \"target\": {},\n  \"steps\": {}\n}}",
-            path, target_pos, step
-        );
+// get from input
+let step_vec:Vec<Step_State> = Vec::new();
+let step: Vec<(u8,u8)> = step_vec
+    .into_iter()
+    .map(|steps_state| (steps_state.step_current, steps_state.step_next))
+    .collect();
 
-        let mut file = File::create("input.json")?;
-        file.write_all(json_data.as_bytes())?;
-        println!("[Success] input.json is generated (For Circom witness)");
-    } else {
-        println!("[Failed]: Cannot reach in {}steps", max_step);
-    }
-    Ok(())
+//get from input
+let move_state: Vec<_> = move_state_vec
+    .into_iter() // aquire elements Board_State from Vec
+    .map(|move_state| ((move_state.step_from, 
+                        move_state.piece_id, 
+                        move_state.x_from, move_state.y_from),
+                        (move_state.step_to,
+                        move_state.piece_id_to,
+                        move_state.x_to, move_state.y_to))) // convert elements to state
+    .collect(); // collect converted results as Vec<(u8, PieceId, u8, u8)
+let move_state_relation: Relation<((u8, PieceId, u8, u8), (u8, PieceId, u8, u8))> = move_state.into(); 
+
+// Variable. for dynamic facts that are generated additionlay while 推論中
+let initinal_board_state_vec: Vec<((u8, PieceId, u8, u8),())> = initinal_board_state_vec
+    .into_iter() // aquire elements Board_State from Vec
+    .map(|state| ((state.step, state.piece_id, state.x, state.y),())) // convert elements to state
+    .collect(); // collect converted results as Vec<((u8, PieceId, u8, u8),())>
+let board_state_variable = iteration.variable::<((u8, PieceId, u8, u8),())>("board_state");
+board_state_variable.insert(initinal_board_state_vec.into());
+
+
+
+while iteration.changed() {
+    // Rules
+    // increasing reference, use VariableVariable
+    // insert into board_state_variable
+    board_state_variable.from_join(
+    &board_state_variable, &move_state_relation,
+    |_place
+            ,&(), &(step_to,piece_id,x_to,y_to)|
+            {((step_to,piece_id,x_to,y_to),())});
+
+}
+// print updated board_state_variable
+// TODO: only the moved piece info is added into new board_state_variable.
+// I have to add all other unmoved pieces location into new board_state_variable too
+println!("{:?}", board_state_variable.complete().elements);
+
+Ok(())
 }
